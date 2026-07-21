@@ -91,15 +91,28 @@ export class HomePage extends BasePage {
       )
       .first();
 
-    // Scroll carousel until target is visible
-    while (!(await targetCard.isVisible())) {
-      await this.dealsSectionContainer.hover();
-      if (await nextArrow.isVisible()) {
-        await nextArrow.click();
-        await this.page.waitForTimeout(600);
-      } else {
+    // Scroll carousel until target is visible (max 15 attempts)
+    const MAX_SCROLL_ATTEMPTS = 15;
+
+    for (let attempt = 0; attempt < MAX_SCROLL_ATTEMPTS; attempt++) {
+      if (await targetCard.isVisible()) {
         break;
       }
+
+      await this.dealsSectionContainer.hover();
+
+      if (!(await nextArrow.isVisible())) {
+        break;
+      }
+
+      await nextArrow.click();
+      await this.page.waitForTimeout(600);
+    }
+
+    if (!(await targetCard.isVisible())) {
+      throw new Error(
+        `Target product was not visible after ${MAX_SCROLL_ATTEMPTS} carousel scroll attempts.`,
+      );
     }
 
     const productText = await targetCard.innerText();
