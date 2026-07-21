@@ -70,7 +70,11 @@ export class ProductPage extends BasePage {
   }
 
   async goToCart() {
-    await this.cartIcon.click({ force: true });
+    // Ensure the cart icon is visible and attached to the DOM
+    await this.cartIcon.waitFor({ state: "visible" });
+
+    // Standard click with Playwright's native actionability checks
+    await this.cartIcon.click();
     await this.page.waitForLoadState("domcontentloaded");
   }
 }

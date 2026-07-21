@@ -27,7 +27,7 @@ export class CartPage extends BasePage {
 
   async proceedToCheckout() {
     await this.checkoutBtn.waitFor({ state: "visible", timeout: 5000 });
-    await this.checkoutBtn.click({ force: true });
+    await this.checkoutBtn.click();
   }
 
   async validateLoginModalVisible() {

@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { Locator, Page } from "@playwright/test";
 
 export class BasePage {
   readonly page: Page;
@@ -32,5 +32,20 @@ export class BasePage {
         .click();
       await screenOverlay.waitFor({ state: "hidden", timeout: 3000 });
     }
+  }
+
+  /**
+   * Safely clicks an element by ensuring it is in view,
+   * clearing any overlays, and performing a standard actionability check.
+   */
+  async safeClick(locator: Locator) {
+    // 1. Ensure the element is in the viewport
+    await locator.scrollIntoViewIfNeeded();
+
+    // 2. Clear any overlays that might be blocking the click
+    await this.dismissVisibleOverlay();
+
+    // 3. Perform a standard click without { force: true }
+    await locator.click();
   }
 }
