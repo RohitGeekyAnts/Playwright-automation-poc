@@ -120,11 +120,14 @@ export class HomePage extends BasePage {
       .split("\n")[0]
       .trim()
       .replace("...", "");
-    const productHref = await targetCard.getAttribute("href");
+    // Native click simulation
+    // (If you added safeClick to BasePage, change this to: await this.safeClick(targetCard);)
+    await this.dismissVisibleOverlay();
+    await targetCard.click();
 
-    if (!productHref) throw new Error("Could not find the 'href' attribute!");
-
-    await this.page.goto(productHref, { waitUntil: "domcontentloaded" });
+    // Wait for the new page to fully load before returning
+    await this.dismissVisibleOverlay();
+    await this.page.waitForLoadState("domcontentloaded");
 
     return cardTitleSnippet;
   }
