@@ -5,7 +5,12 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
-    "test:1mg": "playwright test tests/one-mg.spec.ts --project=chromium"
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:chromium": "playwright test --project=chromium",
+    "test:checkout": "playwright test tests/1mg-super-saving-checkout-flow.spec.ts",
+    "test:carousel": "playwright test tests/1mg-home-carousel.spec.ts",
+    "report": "playwright show-report"
   },
   "keywords": [],
   "author": "",
