@@ -23,12 +23,12 @@ test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
   const pdpTitle = await productPage.getProductTitle();
   expect(pdpTitle.toLowerCase()).toContain(cardTitleSnippet.toLowerCase());
 
-  // STEP 6: Add to Cart & Validate Quantity
+  // STEP 6: Add to Cart & Fetch Active Locator (Handles dynamic default quantities)
   await productPage.clickAddButton();
-  const activeOneAddedLocator = await productPage.validateQuantityState(1);
+  const activeQtyLocator = await productPage.getActiveQuantityLocator();
 
-  // STEP 7: Increase Quantity to 3
-  await productPage.changeQuantity(activeOneAddedLocator, 3);
+  // STEP 7: Increase Quantity to 3 & Validate
+  await productPage.changeQuantity(activeQtyLocator, 3);
   await productPage.validateQuantityState(3);
 
   // STEP 8: Go to Cart

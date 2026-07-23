@@ -3,13 +3,11 @@ import { BasePage } from "./BasePage";
 
 export class ProductPage extends BasePage {
   readonly titleElement: Locator;
-  readonly addButtons: Locator;
   readonly cartIcon: Locator;
 
   constructor(page: Page) {
     super(page);
     this.titleElement = page.locator("h1").first();
-    this.addButtons = page.getByText("ADD", { exact: true });
     this.cartIcon = page.locator('a[href="/cart"]').first();
   }
 
@@ -19,55 +17,62 @@ export class ProductPage extends BasePage {
   }
 
   async clickAddButton() {
-    await this.page.waitForTimeout(2000); // Give JS a moment to hydrate
+    await this.page.waitForTimeout(2000);
 
     await expect(async () => {
-      // 1. Is the success state ALREADY visible? (from a previous retry loop)
-      const activeQtyBtn = this.page
+      // PRECISE FIX: Target the main purchase section specifically,
+      // avoiding the "Combo offers" cards further down the page.
+      const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
+      const mainAddButton = mainBuyBox
+        .getByRole("button", { name: /^ADD$/i })
+        .first();
+
+      if (await mainAddButton.isVisible()) {
+        await this.safeClick(mainAddButton);
+      }
+
+      // Verify the quantity selector button has appeared in the main buy box
+      const activeQtyBtn = mainBuyBox
         .locator('[class*="QtySelectedButton"]')
         .first();
-      if (await activeQtyBtn.isVisible()) {
-        return; // Success! Exit the retry block immediately.
-      }
-
-      // 2. If not, find the ADD button and click it
-      let clicked = false;
-      for (let i = 0; i < (await this.addButtons.count()); i++) {
-        if (await this.addButtons.nth(i).isVisible()) {
-          await this.safeClick(this.addButtons.nth(i));
-          clicked = true;
-          break;
-        }
-      }
-
-      // If we couldn't find the Qty button AND we couldn't find the ADD button, fail the attempt
-      expect(clicked).toBeTruthy();
-
-      // 3. Verify the button appeared (If this fails, .toPass will safely retry step 1)
-      await expect(activeQtyBtn).toBeVisible({ timeout: 2000 });
-    }).toPass({ timeout: 10000 });
+      await expect(activeQtyBtn).toBeVisible({ timeout: 5000 });
+    }).toPass({ timeout: 15000 });
   }
 
-  async validateQuantityState(quantity: number): Promise<Locator> {
-    // Locate the active quantity button using the exact class from your HTML
-    const activeQtyBtn = this.page
-      .locator('[class*="QtySelectedButton"]')
+  async getActiveQuantityLocator(): Promise<Locator> {
+    const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
+    const activeQtyBtn = mainBuyBox
+      .locator(
+        '[class*="QtySelectedButton"], button:has(img[alt*="chevron" i])',
+      )
       .first();
 
-    // Instead of exact text matching, we just check that the button CONTAINS the target number.
-    // This perfectly handles "1", "3", "1 Added", or "3 Added" automatically!
-    await expect(activeQtyBtn).toContainText(quantity.toString(), {
-      timeout: 8000,
-    });
-
+    await expect(activeQtyBtn).toBeVisible({ timeout: 8000 });
     return activeQtyBtn;
   }
 
+  async validateQuantityState(expectedQuantity: number): Promise<Locator> {
+    const activeLocator = await this.getActiveQuantityLocator();
+    await expect(activeLocator).toContainText(expectedQuantity.toString(), {
+      timeout: 5000,
+    });
+    return activeLocator;
+  }
+
   async changeQuantity(currentQtyLocator: Locator, newQuantity: number) {
-    await this.safeClick(currentQtyLocator);
+    const chevronIcon = currentQtyLocator
+      .locator('img[alt*="chevron" i]')
+      .first();
+
+    if (await chevronIcon.isVisible()) {
+      await this.safeClick(chevronIcon);
+    } else {
+      await this.safeClick(currentQtyLocator);
+    }
 
     const quantityModal = this.page
-      .getByRole("dialog", { name: /Select Quantity/i })
+      .locator('[class*="Dialog__vsatOverlay"], dialog, [role="dialog"]')
+      .filter({ hasText: /Select Quantity/i })
       .first();
 
     await quantityModal.waitFor({ state: "visible", timeout: 5000 });
