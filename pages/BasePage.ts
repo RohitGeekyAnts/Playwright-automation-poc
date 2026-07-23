@@ -49,6 +49,15 @@ export class BasePage {
     if (await promoCloseBtn.isVisible()) {
       await promoCloseBtn.click();
     }
+    // 3. Generic 1mg modal overlay interceptor cleanup
+    const genericOverlayClose = this.page
+      .locator(
+        '.Dialog__vsatOverlay__gJS_t button[aria-label="cross"], .Dialog__vsatOverlay__gJS_t button',
+      )
+      .first();
+    if (await genericOverlayClose.isVisible()) {
+      await genericOverlayClose.click();
+    }
   }
 
   /**
