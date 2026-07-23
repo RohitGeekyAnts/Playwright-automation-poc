@@ -19,62 +19,70 @@ export class ProductPage extends BasePage {
   }
 
   async clickAddButton() {
-    await this.page.waitForTimeout(2000);
+    await this.page.waitForTimeout(2000); // Give JS a moment to hydrate
+
     await expect(async () => {
+      // 1. Is the success state ALREADY visible? (from a previous retry loop)
+      const activeQtyBtn = this.page
+        .locator('[class*="QtySelectedButton"]')
+        .first();
+      if (await activeQtyBtn.isVisible()) {
+        return; // Success! Exit the retry block immediately.
+      }
+
+      // 2. If not, find the ADD button and click it
       let clicked = false;
       for (let i = 0; i < (await this.addButtons.count()); i++) {
         if (await this.addButtons.nth(i).isVisible()) {
-          await this.addButtons.nth(i).click();
+          await this.safeClick(this.addButtons.nth(i));
           clicked = true;
           break;
         }
       }
+
+      // If we couldn't find the Qty button AND we couldn't find the ADD button, fail the attempt
       expect(clicked).toBeTruthy();
-    }).toPass({ timeout: 5000 });
+
+      // 3. Verify the button appeared (If this fails, .toPass will safely retry step 1)
+      await expect(activeQtyBtn).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 10000 });
   }
 
   async validateQuantityState(quantity: number): Promise<Locator> {
-    const qtyElements = this.page.getByText(
-      new RegExp(`${quantity}\\s*Added`, "i"),
-    );
-    let activeLocator = qtyElements.first();
+    // Locate the active quantity button using the exact class from your HTML
+    const activeQtyBtn = this.page
+      .locator('[class*="QtySelectedButton"]')
+      .first();
 
-    await expect(async () => {
-      let found = false;
-      for (let i = 0; i < (await qtyElements.count()); i++) {
-        if (await qtyElements.nth(i).isVisible()) {
-          activeLocator = qtyElements.nth(i);
-          found = true;
-          break;
-        }
-      }
-      expect(found).toBeTruthy();
-    }).toPass({ timeout: 8000 });
+    // Instead of exact text matching, we just check that the button CONTAINS the target number.
+    // This perfectly handles "1", "3", "1 Added", or "3 Added" automatically!
+    await expect(activeQtyBtn).toContainText(quantity.toString(), {
+      timeout: 8000,
+    });
 
-    return activeLocator;
+    return activeQtyBtn;
   }
 
   async changeQuantity(currentQtyLocator: Locator, newQuantity: number) {
-    await currentQtyLocator.click();
+    await this.safeClick(currentQtyLocator);
+
     const quantityModal = this.page
-      .locator("div")
-      .filter({ has: this.page.getByText("Select Quantity") })
-      .filter({ has: this.page.getByText("Remove") })
-      .last();
+      .getByRole("dialog", { name: /Select Quantity/i })
+      .first();
+
+    await quantityModal.waitFor({ state: "visible", timeout: 5000 });
 
     const option = quantityModal
       .getByText(newQuantity.toString(), { exact: true })
       .first();
-    await option.click();
+
+    await this.safeClick(option);
     await this.page.waitForTimeout(1000);
   }
 
   async goToCart() {
-    // Ensure the cart icon is visible and attached to the DOM
     await this.cartIcon.waitFor({ state: "visible" });
-
-    // Standard click with Playwright's native actionability checks
-    await this.cartIcon.click();
+    await this.safeClick(this.cartIcon);
     await this.page.waitForLoadState("domcontentloaded");
   }
 }

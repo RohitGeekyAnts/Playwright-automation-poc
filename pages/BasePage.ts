@@ -9,54 +9,45 @@ export class BasePage {
 
   // The shared overlay handler used across all pages
   async dismissOverlay() {
-    // 1. Check for the original power overlay
-    const powerOverlay = this.page.locator(".bg_power_overlay.show");
+    // 1. Check directly for the original power overlay close button
+    const powerCloseBtn = this.page
+      .locator('.bg_power_close, button[aria-label="Close"]')
+      .first();
     try {
-      if (await powerOverlay.isVisible()) {
-        await this.page
-          .locator('.bg_power_close, [aria-label="Close"]')
-          .first()
-          .click();
-        await powerOverlay.waitFor({ state: "hidden", timeout: 3000 });
+      if (await powerCloseBtn.isVisible()) {
+        await powerCloseBtn.click();
       }
     } catch (error) {
       // Silently continue if it doesn't appear
     }
 
-    // 2. Check for the Evening Sample Collection promo dialog
-    // Using .first() to prevent strict mode violations if multiple containers exist
-    const promoDialog = this.page
-      .locator('[class*="Dialog__vsatContainer"]')
+    // 2. Check directly for the Promo Dialog close button
+    const promoCloseBtn = this.page
+      .locator('button[aria-label="cross"]')
       .first();
     try {
-      if (await promoDialog.isVisible()) {
-        await this.page.locator('button[aria-label="cross"]').first().click();
-        await promoDialog.waitFor({ state: "hidden", timeout: 3000 });
+      if (await promoCloseBtn.isVisible()) {
+        await promoCloseBtn.click();
       }
-    } catch (error) {
-      // Silently continue if it doesn't appear
-    }
+    } catch (error) {}
   }
 
   // Fallback for when scrolling triggers the overlay again before a click
   async dismissVisibleOverlay() {
     // 1. Old overlay fallback
-    const powerOverlay = this.page.locator(".bg_power_overlay.show");
-    if (await powerOverlay.isVisible()) {
-      await this.page
-        .locator('.bg_power_close, [aria-label="Close"]')
-        .first()
-        .click();
-      await powerOverlay.waitFor({ state: "hidden", timeout: 3000 });
+    const powerCloseBtn = this.page
+      .locator('.bg_power_close, button[aria-label="Close"]')
+      .first();
+    if (await powerCloseBtn.isVisible()) {
+      await powerCloseBtn.click();
     }
 
     // 2. New promo dialog fallback
-    const promoDialog = this.page
-      .locator('[class*="Dialog__vsatContainer"]')
+    const promoCloseBtn = this.page
+      .locator('button[aria-label="cross"]')
       .first();
-    if (await promoDialog.isVisible()) {
-      await this.page.locator('button[aria-label="cross"]').first().click();
-      await promoDialog.waitFor({ state: "hidden", timeout: 3000 });
+    if (await promoCloseBtn.isVisible()) {
+      await promoCloseBtn.click();
     }
   }
 

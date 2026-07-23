@@ -7,15 +7,18 @@ export class CartPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
+
+    // REFACTORED: Directly targets interactive elements, removing the wide 'div' fallback and complex .or() chain
     this.checkoutBtn = page
-      .locator('a[href*="/checkout"]')
-      .or(
-        page
-          .locator("a, button, div")
-          .filter({ hasText: /CHECKOUT|CONTINUE/i }),
-      )
+      .locator('a[href*="/checkout"], button')
+      .filter({ hasText: /checkout|continue/i })
       .last();
-    this.loginModal = page.getByText("Login", { exact: true }).first();
+
+    // REFACTORED: Using a stable, semantic locator for the modal popup
+    this.loginModal = page
+      .getByRole("dialog")
+      .filter({ hasText: "Login" })
+      .first();
   }
 
   async validateItemExists(itemSnippet: string) {
@@ -27,7 +30,9 @@ export class CartPage extends BasePage {
 
   async proceedToCheckout() {
     await this.checkoutBtn.waitFor({ state: "visible", timeout: 5000 });
-    await this.checkoutBtn.click();
+
+    // REFACTORED: Replaced native click with safeClick
+    await this.safeClick(this.checkoutBtn);
   }
 
   async validateLoginModalVisible() {

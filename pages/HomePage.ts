@@ -16,9 +16,8 @@ export class HomePage extends BasePage {
 
     // Hero Carousel
     this.playPauseButton = page
-      .locator(
-        'button[class*="BannerWidgetCarouselAutoScroll__slideDotsPlayPause"]',
-      )
+      .locator("button")
+      .filter({ has: page.locator('img[alt="Play"], img[alt="Pause"]') })
       .first();
     this.pauseIcon = this.playPauseButton.locator('img[alt="Pause"]');
     this.playIcon = this.playPauseButton.locator('img[alt="Play"]');
@@ -27,11 +26,14 @@ export class HomePage extends BasePage {
     this.dealsSectionTitle = page
       .getByRole("heading", { name: /super saving deals/i })
       .first();
+
+    // REFACTORED: Using .last() grabs the shared "flexColumn" parent div that contains
+    // BOTH the title sibling and the carousel sibling (from the screenshot DOM).
     this.dealsSectionContainer = page
       .locator("div")
       .filter({ has: this.dealsSectionTitle })
-      .filter({ has: page.getByText("See all", { exact: false }) })
-      .first();
+      .filter({ has: page.locator('[class*="Carousel__slide"]') })
+      .last();
   }
 
   async navigate() {
@@ -42,8 +44,11 @@ export class HomePage extends BasePage {
   // --- HERO CAROUSEL METHODS ---
   async getActiveSlideLabel(): Promise<string> {
     const activeDot = this.page
-      .locator('div[class*="BannerWidgetCarouselAutoScroll__activeSliderDot"]')
+      .locator(
+        '[aria-label*="slide" i][aria-selected="true"], [aria-label*="slide" i][class*="active"]',
+      )
       .first();
+
     await activeDot.waitFor({ state: "attached", timeout: 5000 });
     const label = await activeDot.getAttribute("aria-label");
     if (!label) throw new Error("Could not find aria-label on the active dot!");
@@ -51,7 +56,7 @@ export class HomePage extends BasePage {
   }
 
   async togglePlayPause() {
-    await this.playPauseButton.evaluate((btn: HTMLElement) => btn.click());
+    await this.safeClick(this.playPauseButton);
   }
 
   async waitForSlideTransition(ms: number = 6500) {
@@ -71,23 +76,21 @@ export class HomePage extends BasePage {
       .first()
       .waitFor({ state: "visible", timeout: 10000 });
 
-    const productCards = this.dealsSectionContainer
-      .locator("a")
-      .filter({ hasText: "₹" });
+    // Precise: Targeting the exact Slide class from the DOM screenshot instead of heavy generic "a" tags
+    const productCards = this.dealsSectionContainer.locator(
+      '[class*="Carousel__slide"]',
+    );
     await productCards.first().waitFor({ state: "attached", timeout: 5000 });
 
     const totalItems = await productCards.count();
+
+    // REQUIREMENT MET: nth(totalItems - 2) picks the item BEFORE the last item
     const targetCard = productCards.nth(totalItems - offset);
 
+    // Standard Next Arrow
     const nextArrow = this.dealsSectionContainer
       .locator(
-        '[class*="slider-arrow-right"], .slick-next, [aria-label="Next"], svg',
-      )
-      .filter({ hasText: ">" })
-      .or(
-        this.dealsSectionContainer.locator(
-          '[class*="slider-arrow-right"], .slick-next, [aria-label="Next"]',
-        ),
+        '[aria-label="Next"], .slick-next, [class*="right" i][class*="arrow" i]',
       )
       .first();
 
@@ -105,6 +108,7 @@ export class HomePage extends BasePage {
         break;
       }
 
+      // Standard click is used here to avoid scrolling the whole window while navigating the carousel
       await nextArrow.click();
       await this.page.waitForTimeout(600);
     }
@@ -120,13 +124,11 @@ export class HomePage extends BasePage {
       .split("\n")[0]
       .trim()
       .replace("...", "");
-    // Native click simulation
-    // (If you added safeClick to BasePage, change this to: await this.safeClick(targetCard);)
-    await this.dismissVisibleOverlay();
-    await targetCard.click();
+
+    // REFACTORED: Utilized safeClick for consistency across the framework
+    await this.safeClick(targetCard);
 
     // Wait for the new page to fully load before returning
-    await this.dismissVisibleOverlay();
     await this.page.waitForLoadState("domcontentloaded");
 
     return cardTitleSnippet;
