@@ -1,4 +1,4 @@
-import { Locator, Page } from "@playwright/test";
+import { Locator, Page, expect } from "@playwright/test";
 import { BasePage } from "./BasePage";
 
 export class HomePage extends BasePage {
@@ -27,8 +27,6 @@ export class HomePage extends BasePage {
       .getByRole("heading", { name: /super saving deals/i })
       .first();
 
-    // REFACTORED: Using .last() grabs the shared "flexColumn" parent div that contains
-    // BOTH the title sibling and the carousel sibling (from the screenshot DOM).
     this.dealsSectionContainer = page
       .locator("div")
       .filter({ has: this.dealsSectionTitle })
@@ -59,8 +57,11 @@ export class HomePage extends BasePage {
     await this.safeClick(this.playPauseButton);
   }
 
-  async waitForSlideTransition(ms: number = 6500) {
-    await this.page.waitForTimeout(ms);
+  async waitForSlideToChange(initialLabel: string) {
+    await expect(async () => {
+      const currentLabel = await this.getActiveSlideLabel();
+      expect(currentLabel).not.toBe(initialLabel);
+    }).toPass({ timeout: 15000 });
   }
 
   // --- DEALS CAROUSEL METHODS ---
@@ -76,25 +77,20 @@ export class HomePage extends BasePage {
       .first()
       .waitFor({ state: "visible", timeout: 10000 });
 
-    // Precise: Targeting the exact Slide class from the DOM screenshot instead of heavy generic "a" tags
     const productCards = this.dealsSectionContainer.locator(
       '[class*="Carousel__slide"]',
     );
     await productCards.first().waitFor({ state: "attached", timeout: 5000 });
 
     const totalItems = await productCards.count();
-
-    // REQUIREMENT MET: nth(totalItems - 2) picks the item BEFORE the last item
     const targetCard = productCards.nth(totalItems - offset);
 
-    // Standard Next Arrow
     const nextArrow = this.dealsSectionContainer
       .locator(
         '[aria-label="Next"], .slick-next, [class*="right" i][class*="arrow" i]',
       )
       .first();
 
-    // Scroll carousel until target is visible (max 15 attempts)
     const MAX_SCROLL_ATTEMPTS = 15;
 
     for (let attempt = 0; attempt < MAX_SCROLL_ATTEMPTS; attempt++) {
@@ -108,9 +104,14 @@ export class HomePage extends BasePage {
         break;
       }
 
-      // Standard click is used here to avoid scrolling the whole window while navigating the carousel
       await nextArrow.click();
-      await this.page.waitForTimeout(600);
+
+      try {
+        await expect(targetCard).toBeVisible({ timeout: 1000 });
+        break;
+      } catch {
+        // Continue to the next loop iteration (click again) if it's still not visible
+      }
     }
 
     if (!(await targetCard.isVisible())) {
@@ -125,10 +126,7 @@ export class HomePage extends BasePage {
       .trim()
       .replace("...", "");
 
-    // REFACTORED: Utilized safeClick for consistency across the framework
     await this.safeClick(targetCard);
-
-    // Wait for the new page to fully load before returning
     await this.page.waitForLoadState("domcontentloaded");
 
     return cardTitleSnippet;

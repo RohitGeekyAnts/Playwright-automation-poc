@@ -62,16 +62,34 @@ export class BasePage {
 
   /**
    * Safely clicks an element by ensuring it is in view,
-   * clearing any known overlays, and performing a standard actionability check.
+   * clearing any known overlays, and handling late-loading asynchronous ads.
    */
   async safeClick(locator: Locator) {
-    // 1. Ensure the element is in the viewport
+    // 1. Ensure the element is in the viewport (This often triggers lazy-loaded ads)
     await locator.scrollIntoViewIfNeeded();
 
-    // 2. Clear any overlays (power overlay or promo dialogs) that might be blocking the click
+    // 2. Clear any overlays that are immediately visible
     await this.dismissVisibleOverlay();
 
-    // 3. Perform a standard click without { force: true }
-    await locator.click();
+    try {
+      // 3. Attempt the click with a short timeout (3 seconds).
+      // If a lazy-loaded ad pops up and intercepts it, this will quickly fail instead of hanging for 30s.
+      await locator.click({ timeout: 3000 });
+    } catch (error: any) {
+      // 4. If intercepted, it means an ad appeared AFTER our first dismissal attempt
+      if (
+        error.message.includes("intercepts pointer events") ||
+        error.message.includes("Timeout")
+      ) {
+        // The ad is now fully rendered in the DOM, so dismiss it!
+        await this.dismissVisibleOverlay();
+
+        // Final attempt with the standard default timeout
+        await locator.click();
+      } else {
+        // Re-throw if the click failed for a completely different reason (e.g., element detached)
+        throw error;
+      }
+    }
   }
 }

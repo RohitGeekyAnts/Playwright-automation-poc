@@ -17,7 +17,10 @@ test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
 
   // STEP 3 & 4: Navigate carousel and open the 2nd to last product
   const cardTitleSnippet = await homePage.openDealProductFromEnd(2);
-  expect(page.url()).not.toBe("https://www.1mg.com/");
+
+  // REFACTORED: Using async web-first assertion. It will smartly poll until
+  // the URL changes, preventing failures on slow network connections.
+  await expect(page).not.toHaveURL("https://www.1mg.com/");
 
   // STEP 5: Validate PDP
   const pdpTitle = await productPage.getProductTitle();
@@ -33,7 +36,9 @@ test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
 
   // STEP 8: Go to Cart
   await productPage.goToCart();
-  expect(page.url()).toContain("/cart");
+
+  // REFACTORED: Using Regex (/. *\/cart/) with an async assertion to poll for the cart page URL
+  await expect(page).toHaveURL(/.*\/cart/);
 
   // STEP 9: Validate Cart & Checkout
   await cartPage.validateItemExists(cardTitleSnippet);

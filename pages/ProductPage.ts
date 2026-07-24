@@ -17,11 +17,7 @@ export class ProductPage extends BasePage {
   }
 
   async clickAddButton() {
-    await this.page.waitForTimeout(2000);
-
     await expect(async () => {
-      // PRECISE FIX: Target the main purchase section specifically,
-      // avoiding the "Combo offers" cards further down the page.
       const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
       const mainAddButton = mainBuyBox
         .getByRole("button", { name: /^ADD$/i })
@@ -82,7 +78,10 @@ export class ProductPage extends BasePage {
       .first();
 
     await this.safeClick(option);
-    await this.page.waitForTimeout(1000);
+
+    // REFACTORED: Replaced 1000ms hard wait with a smart state check.
+    // We instantly proceed the exact millisecond the modal disappears.
+    await quantityModal.waitFor({ state: "hidden", timeout: 5000 });
   }
 
   async goToCart() {
