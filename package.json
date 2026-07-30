@@ -10,6 +10,7 @@
     "test:chromium": "playwright test --project=chromium",
     "test:checkout": "playwright test tests/1mg-super-saving-checkout-flow.spec.ts",
     "test:carousel": "playwright test tests/1mg-home-carousel.spec.ts",
+    "test:persistence": "playwright test tests/1mg-search-cart-persistence.spec.ts",
     "report": "playwright show-report"
   },
   "keywords": [],

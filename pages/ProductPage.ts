@@ -89,4 +89,90 @@ export class ProductPage extends BasePage {
     await this.safeClick(this.cartIcon);
     await this.page.waitForLoadState("domcontentloaded");
   }
+
+  // --- NEW FLOW 2 METHODS ---
+
+  async getFullProductDetails() {
+    const name = await this.titleElement.innerText();
+    const headerBlockText = await this.titleElement.locator("..").innerText();
+    const packSizeMatch = headerBlockText.match(
+      /(strip of|bottle of|box of|packet of|tube of|\d+\s+tablets?)[^\n]*/i,
+    );
+    const packSize = packSizeMatch
+      ? packSizeMatch[0].replace(/Composition.*/i, "").trim()
+      : "";
+
+    // REFACTORED: Target the exact main buy box, completely ignoring substitute cards at the bottom
+    const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
+    const priceBoxText = await mainBuyBox.innerText();
+
+    // Clean the text stream: keep only lines with ₹, ignore "per ml/tablet" unit pricing
+    const cleanPriceLines = priceBoxText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.includes("₹") && !l.toLowerCase().includes("per"));
+
+    // The first valid price on a 1mg PDP is ALWAYS the Selling Price
+    const sellingPrice = cleanPriceLines[0] || "";
+    let mrp = sellingPrice;
+
+    // If a second price exists and is higher, it represents the crossed-out MRP
+    if (cleanPriceLines.length > 1) {
+      const spVal = parseFloat(sellingPrice.replace(/[^0-9.]/g, ""));
+      const secondVal = parseFloat(cleanPriceLines[1].replace(/[^0-9.]/g, ""));
+      if (secondVal > spVal) {
+        mrp = cleanPriceLines[1];
+      }
+    }
+
+    // Find the standard discount, explicitly ignoring "Get Extra 4% off" Care Plan banners
+    const discountLine = priceBoxText
+      .split("\n")
+      .find((l) => /\d+%\s*off/i.test(l) && !l.toLowerCase().includes("extra"));
+    const discountMatch = discountLine
+      ? discountLine.match(/\d+%\s*off/i)
+      : null;
+
+    return {
+      name: name.trim(),
+      packSize: packSize,
+      sellingPrice: sellingPrice,
+      mrp: mrp,
+      discount: discountMatch ? discountMatch[0] : "",
+    };
+  }
+
+  async getBreadcrumbText(): Promise<string> {
+    // 1mg frequently updates CSS classes. We use a structural fallback.
+    // Look for the exact "Home" link in the main container, which is the start of the breadcrumb trail.
+    const homeLink = this.page
+      .locator("main")
+      .getByRole("link", { name: "Home", exact: true })
+      .first();
+
+    try {
+      // Wait briefly to see if it attaches to DOM
+      await homeLink.waitFor({ state: "visible", timeout: 3000 });
+
+      // In the DOM structure, the "Home" link is inside a wrapper, and the actual breadcrumb row is the grandparent.
+      const breadcrumbRow = homeLink.locator("..").locator("..");
+      return await breadcrumbRow.innerText();
+    } catch (error) {
+      // If there is no breadcrumb (e.g., OTC items or variants), return an empty string safely
+      return "";
+    }
+  }
+
+  // In pages/ProductPage.ts
+  async getDeliveryPromise(): Promise<string> {
+    // Rely on the actual user-visible text prefix instead of unstable CSS classes
+    const deliveryText = this.page.getByText(/Get by/i).first();
+
+    try {
+      await deliveryText.waitFor({ state: "visible", timeout: 5000 });
+      return await deliveryText.innerText();
+    } catch (error) {
+      return "";
+    }
+  }
 }

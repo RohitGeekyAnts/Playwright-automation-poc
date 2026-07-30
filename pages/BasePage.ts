@@ -9,55 +9,65 @@ export class BasePage {
 
   // The shared overlay handler used across all pages
   async dismissOverlay() {
-    // 1. Check directly for the original power overlay close button
-    const powerCloseBtn = this.page
-      .locator('.bg_power_close, button[aria-label="Close"]')
-      .first();
-    try {
-      if (await powerCloseBtn.isVisible()) {
-        await powerCloseBtn.click();
-      }
-    } catch (error) {
-      // Silently continue if it doesn't appear
-    }
-
-    // 2. Check directly for the Promo Dialog close button
-    const promoCloseBtn = this.page
-      .locator('button[aria-label="cross"]')
-      .first();
-    try {
-      if (await promoCloseBtn.isVisible()) {
-        await promoCloseBtn.click();
-      }
-    } catch (error) {}
+    await this.dismissVisibleOverlay();
   }
 
   // Fallback for when scrolling triggers the overlay again before a click
   async dismissVisibleOverlay() {
-    // 1. Old overlay fallback
-    const powerCloseBtn = this.page
-      .locator('.bg_power_close, button[aria-label="Close"]')
+    // 1. Substitute Savings Modal fallback ("Not now" button)
+    const notNowBtn = this.page
+      .getByRole("button", { name: /not now/i })
       .first();
-    if (await powerCloseBtn.isVisible()) {
-      await powerCloseBtn.click();
-    }
+    try {
+      if (await notNowBtn.isVisible()) {
+        await notNowBtn.click();
+        // BEST PRACTICE: Dynamically wait for the modal to leave the DOM
+        await notNowBtn
+          .waitFor({ state: "hidden", timeout: 3000 })
+          .catch(() => {});
+      }
+    } catch (error) {}
 
-    // 2. New promo dialog fallback
-    const promoCloseBtn = this.page
-      .locator('button[aria-label="cross"]')
+    // 2. New promo dialog & image-based cross fallback
+    const crossBtn = this.page
+      .locator(
+        'button[aria-label="cross"], button[aria-label="Close"], button:has(img[alt*="cross" i])',
+      )
       .first();
-    if (await promoCloseBtn.isVisible()) {
-      await promoCloseBtn.click();
-    }
-    // 3. Generic 1mg modal overlay interceptor cleanup
+    try {
+      if (await crossBtn.isVisible()) {
+        await crossBtn.click();
+        await crossBtn
+          .waitFor({ state: "hidden", timeout: 3000 })
+          .catch(() => {});
+      }
+    } catch (error) {}
+
+    // 3. Old overlay fallback
+    const powerCloseBtn = this.page.locator(".bg_power_close").first();
+    try {
+      if (await powerCloseBtn.isVisible()) {
+        await powerCloseBtn.click();
+        await powerCloseBtn
+          .waitFor({ state: "hidden", timeout: 3000 })
+          .catch(() => {});
+      }
+    } catch (error) {}
+
+    // 4. Generic 1mg modal overlay interceptor cleanup
     const genericOverlayClose = this.page
       .locator(
         '.Dialog__vsatOverlay__gJS_t button[aria-label="cross"], .Dialog__vsatOverlay__gJS_t button',
       )
       .first();
-    if (await genericOverlayClose.isVisible()) {
-      await genericOverlayClose.click();
-    }
+    try {
+      if (await genericOverlayClose.isVisible()) {
+        await genericOverlayClose.click();
+        await genericOverlayClose
+          .waitFor({ state: "hidden", timeout: 3000 })
+          .catch(() => {});
+      }
+    } catch (error) {}
   }
 
   /**
@@ -65,31 +75,28 @@ export class BasePage {
    * clearing any known overlays, and handling late-loading asynchronous ads.
    */
   async safeClick(locator: Locator) {
-    // 1. Ensure the element is in the viewport (This often triggers lazy-loaded ads)
-    await locator.scrollIntoViewIfNeeded();
-
-    // 2. Clear any overlays that are immediately visible
-    await this.dismissVisibleOverlay();
+    if (!locator) {
+      throw new Error("safeClick was called with an undefined locator.");
+    }
 
     try {
-      // 3. Attempt the click with a short timeout (3 seconds).
-      // If a lazy-loaded ad pops up and intercepts it, this will quickly fail instead of hanging for 30s.
-      await locator.click({ timeout: 3000 });
-    } catch (error: any) {
-      // 4. If intercepted, it means an ad appeared AFTER our first dismissal attempt
-      if (
-        error.message.includes("intercepts pointer events") ||
-        error.message.includes("Timeout")
-      ) {
-        // The ad is now fully rendered in the DOM, so dismiss it!
-        await this.dismissVisibleOverlay();
+      await locator.waitFor({ state: "visible", timeout: 5000 });
+      await locator.scrollIntoViewIfNeeded();
+      await this.page.evaluate(() => window.scrollBy(0, -100));
+    } catch (e) {
+      await this.dismissVisibleOverlay();
+    }
 
-        // Final attempt with the standard default timeout
-        await locator.click();
-      } else {
-        // Re-throw if the click failed for a completely different reason (e.g., element detached)
-        throw error;
-      }
+    // Dismiss any overlays that might be covering the element
+    await this.dismissVisibleOverlay();
+
+    // Standard Playwright click - resilient and compliant
+    // Added force: true inside the catch block as a final fallback if 1mg uses transparent overlays
+    try {
+      await locator.click({ timeout: 5000 });
+    } catch (clickError) {
+      await this.dismissVisibleOverlay();
+      await locator.click({ force: true });
     }
   }
 }
