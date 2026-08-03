@@ -108,30 +108,34 @@ export class CartPage extends BasePage {
     const deleteBtn = cartItemLink
       .locator("button")
       .filter({
-        has: this.page.locator('img[alt*="delete" i], img[alt*="reduce" i]'),
+        // Stricter locator just for the delete icon
+        has: this.page.locator('img[alt*="delete" i]'),
       })
       .first();
 
     await this.safeClick(deleteBtn);
 
-    // FIX: Use waitFor instead of isVisible so slower browsers (Firefox)
-    // have time to render the confirmation modal before skipping it.
+    // FIX 1: Restrict confirmation search ONLY to dialog modals to prevent double-clicking
     const confirmRemoveBtn = this.page
+      .getByRole("dialog")
       .getByRole("button", { name: /remove|delete|yes/i })
       .first();
 
     try {
-      await confirmRemoveBtn.waitFor({ state: "visible", timeout: 4000 });
+      await confirmRemoveBtn.waitFor({ state: "visible", timeout: 3000 });
       await this.safeClick(confirmRemoveBtn);
     } catch (e) {
       // Continue safely if no confirmation prompt appears
     }
+
+    // FIX 2: Explicitly wait for the item to fade out of the DOM
+    await cartItemLink.waitFor({ state: "hidden", timeout: 10000 });
   }
 
   async validateEmptyCart() {
-    // FIX: Using "items?" makes the "s" optional, catching both "item" and "items"
+    // FIX 3: Use the exact phrase to prevent matching hidden script/meta tags
     const emptyMsg = this.page
-      .getByText(/empty|nothing|0 items?|no items?/i)
+      .getByText(/Your cart is empty|0 items?|no items?/i)
       .first();
 
     await expect(emptyMsg).toBeVisible({ timeout: 10000 });
