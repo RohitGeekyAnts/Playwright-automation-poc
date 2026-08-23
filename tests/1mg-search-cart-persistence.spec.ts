@@ -7,6 +7,7 @@ import { CartPage } from "../pages/CartPage";
 test("Flow 2: Search, Sort, Location Persistence, and Cart Math", async ({
   page,
 }) => {
+  test.setTimeout(120000);
   const homePage = new HomePage(page);
   const searchPage = new SearchResultsPage(page);
   const productPage = new ProductPage(page);

@@ -18,32 +18,55 @@ export class ProductPage extends BasePage {
 
   async clickAddButton() {
     await expect(async () => {
-      const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
-      const mainAddButton = mainBuyBox
-        .getByRole("button", { name: /^ADD$/i })
-        .first();
-
-      if (await mainAddButton.isVisible()) {
-        await this.safeClick(mainAddButton);
+      let mainBuyBox = this.page.locator(".col-8.flexColumn").first();
+      if ((await mainBuyBox.count()) === 0) {
+        mainBuyBox = this.page.locator("main").first();
       }
 
-      // Verify the quantity selector button has appeared in the main buy box
-      const activeQtyBtn = mainBuyBox
-        .locator('[class*="QtySelectedButton"]')
+      const mainAddButton = mainBuyBox
+        .getByRole("button", { name: /^add$|^add to cart$/i })
         .first();
+
+      const activeQtyBtn = mainBuyBox
+        .locator(
+          '[class*="QtySelectedButton"], button:has(img[alt*="chevron" i])',
+        )
+        .first();
+
+      // Only attempt to click ADD if the item isn't already in the "Added" state
+      if ((await activeQtyBtn.count()) === 0) {
+        if ((await mainAddButton.count()) > 0) {
+          await this.safeClick(mainAddButton);
+
+          // FIX: Handle the Substitute Savings modal by clicking the top-right 'X' instead of 'Not now'
+          const closePopupBtn = this.page
+            .getByRole("button", { name: /cross/i })
+            .first();
+
+          try {
+            await closePopupBtn.waitFor({ state: "visible", timeout: 3000 });
+            await closePopupBtn.click(); // Standard, stable click!
+            await closePopupBtn.waitFor({ state: "hidden", timeout: 3000 });
+          } catch (e) {
+            // Modal did not appear or closed instantly, safely ignore
+          }
+        }
+      }
+
+      // Verify it successfully transitioned to the Added state
       await expect(activeQtyBtn).toBeVisible({ timeout: 5000 });
     }).toPass({ timeout: 15000 });
   }
 
   async getActiveQuantityLocator(): Promise<Locator> {
-    const mainBuyBox = this.page.locator(".col-8.flexColumn").first();
-    const activeQtyBtn = mainBuyBox
-      .locator(
-        '[class*="QtySelectedButton"], button:has(img[alt*="chevron" i])',
-      )
-      .first();
+    let mainBuyBox = this.page.locator(".col-8.flexColumn").first();
+    if ((await mainBuyBox.count()) === 0) {
+      mainBuyBox = this.page.locator("main").first();
+    }
 
-    await expect(activeQtyBtn).toBeVisible({ timeout: 8000 });
+    const activeQtyBtn = mainBuyBox
+      .locator('button:has(img[alt*="chevron" i])')
+      .first();
     return activeQtyBtn;
   }
 

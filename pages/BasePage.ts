@@ -21,7 +21,6 @@ export class BasePage {
     try {
       if (await notNowBtn.isVisible()) {
         await notNowBtn.click();
-        // BEST PRACTICE: Dynamically wait for the modal to leave the DOM
         await notNowBtn
           .waitFor({ state: "hidden", timeout: 3000 })
           .catch(() => {});
@@ -68,8 +67,27 @@ export class BasePage {
           .catch(() => {});
       }
     } catch (error) {}
+
+    // FIX: 5. 3rd-Party Iframe Ads (Google/DoubleClick) Fallback
+    // If a massive ad iframe is hijacking the view, pressing Escape is usually the most
+    // reliable way to dismiss it without having to traverse the iframe's internal DOM.
+    try {
+      const adIframe = this.page
+        .locator('iframe[src*="doubleclick.net"]')
+        .first();
+      if (await adIframe.isVisible()) {
+        await this.page.keyboard.press("Escape");
+        await adIframe
+          .waitFor({ state: "hidden", timeout: 2000 })
+          .catch(() => {});
+      }
+    } catch (error) {}
   }
 
+  /**
+   * Safely clicks an element by ensuring it is in view,
+   * clearing any known overlays, and handling late-loading asynchronous ads.
+   */
   /**
    * Safely clicks an element by ensuring it is in view,
    * clearing any known overlays, and handling late-loading asynchronous ads.
@@ -91,12 +109,12 @@ export class BasePage {
     await this.dismissVisibleOverlay();
 
     // Standard Playwright click - resilient and compliant
-    // Added force: true inside the catch block as a final fallback if 1mg uses transparent overlays
     try {
       await locator.click({ timeout: 5000 });
     } catch (clickError) {
       await this.dismissVisibleOverlay();
-      await locator.click({ force: true });
+      // FIX: Added timeout: 5000 here so it fails fast instead of hanging for 3 minutes!
+      await locator.click({ force: true, timeout: 5000 });
     }
   }
 }

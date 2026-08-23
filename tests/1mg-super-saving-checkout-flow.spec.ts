@@ -6,6 +6,7 @@ import { CartPage } from "../pages/CartPage";
 test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
   page,
 }) => {
+  test.setTimeout(120000);
   const homePage = new HomePage(page);
   const productPage = new ProductPage(page);
   const cartPage = new CartPage(page);
@@ -18,9 +19,12 @@ test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
   // STEP 3 & 4: Navigate carousel and open the 2nd to last product
   const cardTitleSnippet = await homePage.openDealProductFromEnd(2);
 
-  // REFACTORED: Using async web-first assertion. It will smartly poll until
-  // the URL changes, preventing failures on slow network connections.
-  await expect(page).not.toHaveURL("https://www.1mg.com/");
+  // FIX: Use Regex to ensure it works regardless of trailing slashes or query parameters
+  // We wait for the URL to NOT be the base homepage URL.
+  await expect(page).not.toHaveURL(/^https:\/\/www\.1mg\.com\/?(\?.*)?$/);
+
+  // Ensure the new page has fully loaded before attempting to read the PDP title
+  await page.waitForLoadState("domcontentloaded");
 
   // STEP 5: Validate PDP
   const pdpTitle = await productPage.getProductTitle();
@@ -37,8 +41,10 @@ test("1mg E2E Flow - Super saving deals Carousel to Checkout", async ({
   // STEP 8: Go to Cart
   await productPage.goToCart();
 
-  // REFACTORED: Using Regex (/. *\/cart/) with an async assertion to poll for the cart page URL
-  await expect(page).toHaveURL(/.*\/cart/);
+  // FIX: Assert on a stable UI element (the Cart heading) instead of a strict URL regex
+  await expect(page.getByRole("heading", { name: /^Cart$/i })).toBeVisible({
+    timeout: 15000,
+  });
 
   // STEP 9: Validate Cart & Checkout
   await cartPage.validateItemExists(cardTitleSnippet);

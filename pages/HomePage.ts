@@ -216,20 +216,35 @@ export class HomePage extends BasePage {
   }
 
   async selectCity(cityName: string) {
-    await this.safeClick(this.locationSelectorInput);
+    const locationInput = this.page.locator("#location-selector");
 
-    const cityOption = this.page.getByText(cityName, { exact: true }).last();
+    // FAST PATH: If the city is already correctly set, skip the UI interaction entirely!
+    const currentCity = await locationInput.inputValue();
+    if (currentCity.trim().toLowerCase() === cityName.toLowerCase()) {
+      return;
+    }
 
-    const responsePromise = this.page
-      .waitForResponse(
-        (res) => res.url().includes("/api/") && res.status() === 200,
-        { timeout: 5000 },
-      )
-      .catch(() => {});
+    const cityOption = this.page
+      .locator(".LocationPicker__cityItem__t7eLq")
+      .filter({ hasText: new RegExp(cityName, "i") })
+      .first();
 
-    await this.safeClick(cityOption);
+    await expect(async () => {
+      await this.dismissVisibleOverlay();
+      await this.page.keyboard.press("Escape");
+      await this.page.waitForTimeout(500);
 
-    await responsePromise;
+      await locationInput.click({ timeout: 3000 });
+      await locationInput.clear();
+      await locationInput.pressSequentially(cityName, { delay: 100 });
+
+      await cityOption.waitFor({ state: "visible", timeout: 4000 });
+      await cityOption.click({ timeout: 3000 });
+
+      await expect(locationInput).toHaveValue(new RegExp(cityName, "i"), {
+        timeout: 3000,
+      });
+    }).toPass({ timeout: 25000 });
   }
 
   // --- NEW FLOW 2 METHODS ---
