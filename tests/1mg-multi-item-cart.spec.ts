@@ -84,5 +84,47 @@ test("Flow 3: Multi-item cart, coupon reconciliation, and UI price validation", 
   console.log("Successfully captured items:", capturedCartItems);
 
   // Pause here to verify all 3 items were added successfully!
-  await page.pause();
+  // ==========================================
+  // STEP 3: Cart Navigation & Math Reconciliation
+  // ==========================================
+
+  // Navigate to the cart page
+  await productPage.goToCart();
+  await expect(page.getByRole("heading", { name: /^Cart$/i })).toBeVisible({
+    timeout: 15000,
+  });
+
+  // Calculate the expected total using MRP to match the Cart's "Item total (MRP)" row
+  let expectedSubtotal = 0;
+  for (const item of capturedCartItems) {
+    // Fall back to MRP if available, otherwise selling price
+    const priceStr = item.mrp || item.sellingPrice || "0";
+    const itemPrice = parseFloat(priceStr.replace(/[^0-9.]/g, ""));
+    expectedSubtotal += itemPrice * item.requestedQty;
+  }
+  console.log(`Expected Math Subtotal (MRP): ₹${expectedSubtotal}`);
+
+  // ==========================================
+  // STEP 4: Subtotal Extraction & Reconciliation
+  // ==========================================
+
+  // Find the parent row containing "Item total (MRP)" and extract the price text from it
+  const summaryRow = page
+    .locator(".flex.justifyBetween")
+    .filter({ hasText: "Item total (MRP)" });
+  await summaryRow.waitFor({ state: "visible", timeout: 10000 });
+  const rowText = await summaryRow.textContent();
+
+  // Extract the numeric value using a clean regex from the full row text
+  const match = (rowText || "").match(/Item total \(MRP\).*?₹\s*([0-9.,]+)/i);
+  const actualCartSubtotal = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+
+  console.log(`Actual UI Subtotal: ₹${actualCartSubtotal}`);
+
+  // Assert that the math matches perfectly (allowing minor rounding variance)
+  expect(actualCartSubtotal).toBeCloseTo(expectedSubtotal, 2);
+
+  // Proceed to Checkout to verify flow completion
+  //   await cartPage.proceedToCheckout();
+  //   await cartPage.validateLoginModalVisible();
 });
