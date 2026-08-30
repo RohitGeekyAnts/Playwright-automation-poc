@@ -140,4 +140,20 @@ export class CartPage extends BasePage {
 
     await expect(emptyMsg).toBeVisible({ timeout: 10000 });
   }
+  async getHandlingCharges(): Promise<number> {
+    const label = this.page.getByText("Handling charges").last();
+    await label.waitFor({ state: "visible" });
+    const text = await label.locator("..").locator("..").innerText();
+    const match = text.match(/₹\s*([0-9.,]+)/);
+    return match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+  }
+
+  async getTotalDiscount(): Promise<number> {
+    const label = this.page.getByText("Total discount").last();
+    await label.waitFor({ state: "visible" });
+    const text = await label.locator("..").locator("..").innerText();
+    const match = text.match(/-?₹\s*([0-9.,]+)/);
+    const value = match ? parseFloat(match[1].replace(/,/g, "")) : 0;
+    return text.includes("-") ? -value : value;
+  }
 }

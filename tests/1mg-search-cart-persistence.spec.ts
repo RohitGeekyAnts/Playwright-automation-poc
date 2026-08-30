@@ -18,6 +18,13 @@ test("Flow 2: Search, Sort, Location Persistence, and Cart Math", async ({
   const defaultCity = await homePage.getCurrentCity();
   expect(defaultCity.length).toBeGreaterThan(0);
 
+  // Clear browser storage to ensure a fresh, empty cart state
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.reload();
+
   // 2. Search "dolo"
   await homePage.searchFor("dolo");
 
