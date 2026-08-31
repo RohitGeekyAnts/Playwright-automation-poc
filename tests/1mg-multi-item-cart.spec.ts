@@ -28,11 +28,13 @@ test("Flow 3: Multi-item cart, coupon reconciliation, and UI price validation", 
   // ==========================================
   await homePage.navigate();
 
-  // Clear local storage to ensure the cart starts fresh at 0 items
+  // FIX: Clear local storage, session storage, AND cookies to ensure the cart starts strictly at 0
   await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
   });
+  await page.context().clearCookies(); // Crucial for wiping guest cart sessions
+
   await page.reload();
 
   await homePage.openLocationDropdownAndGetCities();
@@ -200,5 +202,46 @@ test("Flow 3: Multi-item cart, coupon reconciliation, and UI price validation", 
 
   console.log(
     "Steps 7 & 8 Complete: Coupon application and removal verified successfully.",
+  );
+  // ==========================================
+  // STEP 9: Modify Cart (Remove Item) & Verify Bill Summary Updates
+  // ==========================================
+  const payableBeforeModify = await cartPage.getFinalPayableAmount();
+
+  // Pick an item to remove (e.g., the last item we added)
+  const itemToRemove = capturedCartItems[capturedCartItems.length - 1];
+  console.log(
+    `Step 9: Removing item '${itemToRemove.name}' to verify bill recalculation...`,
+  );
+
+  await cartPage.removeItem(itemToRemove.name);
+
+  // Smart polling: Wait for the final payable amount to strictly decrease
+  let payableAfterModify = 0;
+  await expect(async () => {
+    payableAfterModify = await cartPage.getFinalPayableAmount();
+    expect(payableAfterModify).toBeLessThan(payableBeforeModify);
+  }).toPass({ timeout: 15000 });
+
+  console.log(
+    `Bill Summary Updated Successfully -> Old Payable: ₹${payableBeforeModify}, New Payable: ₹${payableAfterModify}`,
+  );
+
+  // ==========================================
+  // STEP 10: Click Continue to Proceed to Checkout
+  // ==========================================
+  console.log("Step 10: Proceeding to checkout...");
+  await cartPage.proceedToCheckout();
+
+  // ==========================================
+  // STEP 11: Validate Final Gate Check (Login Modal)
+  // ==========================================
+  console.log(
+    "Step 11: Validating login modal appears for unauthenticated user...",
+  );
+  await cartPage.validateLoginModalVisible();
+
+  console.log(
+    "Flow 3 complete: All 11 steps executed and passed successfully!",
   );
 });
