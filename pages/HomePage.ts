@@ -10,6 +10,8 @@ export class HomePage extends BasePage {
   // Deals Carousel Locators
   readonly dealsSectionTitle: Locator;
   readonly dealsSectionContainer: Locator;
+  readonly dealCards: Locator;
+  readonly dealsNextArrow: Locator;
 
   // Header Locators
   readonly locationSelectorInput: Locator;
@@ -42,15 +44,30 @@ export class HomePage extends BasePage {
     );
 
     // Deals Section
+    // FIX: The old '[class*="Carousel__slide"]' selector no longer matches anything.
+    // Anchor on stable things instead: the section heading and the product links
+    // (every product card is a link to /otc/... or /drugs/...).
+    const productLinkSelector = 'a[href^="/otc/"], a[href^="/drugs/"]';
+
     this.dealsSectionTitle = page
       .getByRole("heading", { name: /super saving deals/i })
       .first();
 
+    // Innermost container that holds both the heading and the product cards.
+    // Ancestors also match, but they come earlier in the DOM, so .last() is the innermost.
     this.dealsSectionContainer = page
       .locator("div")
       .filter({ has: this.dealsSectionTitle })
-      .filter({ has: page.locator('[class*="Carousel__slide"]') })
+      .filter({ has: page.locator(productLinkSelector) })
       .last();
+
+    this.dealCards = this.dealsSectionContainer.locator(productLinkSelector);
+
+    // The arrow is an <img alt="next"> on the page, but a <button name="Next"> in the hero.
+    this.dealsNextArrow = this.dealsSectionContainer
+      .getByRole("img", { name: /^next$/i })
+      .or(this.dealsSectionContainer.getByRole("button", { name: /^next$/i }))
+      .first();
 
     // Uses the accessible placeholder name to find the input field
     this.locationSelectorInput = page
@@ -119,24 +136,17 @@ export class HomePage extends BasePage {
   }
 
   async openDealProductFromEnd(offset: number): Promise<string> {
-    await this.page
-      .getByText("₹")
-      .first()
-      .waitFor({ state: "visible", timeout: 10000 });
+    // Web-first assertion: retries until the deals cards render, with a clear error if not.
+    // (Replaces the old page-wide getByText("₹") wait, which matched any price on the page.)
+    await expect(this.dealCards.first()).toBeVisible({ timeout: 10000 });
 
-    const productCards = this.dealsSectionContainer.locator(
-      '[class*="Carousel__slide"]',
-    );
-    await productCards.first().waitFor({ state: "attached", timeout: 5000 });
-
-    const totalItems = await productCards.count();
-    const targetCard = productCards.nth(totalItems - offset);
-
-    const nextArrow = this.dealsSectionContainer
-      .locator(
-        '[aria-label="Next"], .slick-next, [class*="right" i][class*="arrow" i]',
-      )
-      .first();
+    const totalItems = await this.dealCards.count();
+    if (totalItems < offset) {
+      throw new Error(
+        `Expected at least ${offset} deal cards but found ${totalItems}.`,
+      );
+    }
+    const targetCard = this.dealCards.nth(totalItems - offset);
 
     const MAX_SCROLL_ATTEMPTS = 15;
 
@@ -147,11 +157,11 @@ export class HomePage extends BasePage {
 
       await this.dealsSectionContainer.hover();
 
-      if (!(await nextArrow.isVisible())) {
+      if (!(await this.dealsNextArrow.isVisible())) {
         break;
       }
 
-      await nextArrow.click();
+      await this.dealsNextArrow.click();
 
       try {
         await expect(targetCard).toBeVisible({ timeout: 1000 });
@@ -173,7 +183,6 @@ export class HomePage extends BasePage {
       .trim()
       .replace("...", "");
 
-    // REVERTED back to clicking the card directly
     await this.safeClick(targetCard);
     await this.page.waitForLoadState("domcontentloaded");
 
@@ -216,7 +225,7 @@ export class HomePage extends BasePage {
   }
 
   async selectCity(cityName: string) {
-    const locationInput = this.page.locator("#location-selector");
+    const locationInput = this.locationSelectorInput;
 
     // FAST PATH: If the city is already correctly set, skip the UI interaction entirely!
     const currentCity = await locationInput.inputValue();
@@ -224,8 +233,10 @@ export class HomePage extends BasePage {
       return;
     }
 
+    // FIX: partial class match survives the hash suffix changing on each deploy
+    // (was '.LocationPicker__cityItem__t7eLq').
     const cityOption = this.page
-      .locator(".LocationPicker__cityItem__t7eLq")
+      .locator('[class*="LocationPicker__cityItem"]')
       .filter({ hasText: new RegExp(cityName, "i") })
       .first();
 

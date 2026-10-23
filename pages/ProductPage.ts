@@ -89,22 +89,27 @@ export class ProductPage extends BasePage {
       await this.safeClick(currentQtyLocator);
     }
 
+    // The innermost container that holds both the "Select Quantity" title and the options
     const quantityModal = this.page
-      .locator('[class*="Dialog__vsatOverlay"], dialog, [role="dialog"]')
-      .filter({ hasText: /Select Quantity/i })
-      .first();
+      .locator("div")
+      .filter({ has: this.page.getByText("Select Quantity", { exact: true }) })
+      .filter({ has: this.page.getByRole("checkbox") })
+      .last();
 
-    await quantityModal.waitFor({ state: "visible", timeout: 5000 });
+    await expect(quantityModal).toBeVisible({ timeout: 5000 });
 
-    const option = quantityModal
-      .getByText(newQuantity.toString(), { exact: true })
-      .first();
+    // Click the row itself (what a user does), not the hidden checkbox
+    const option = quantityModal.getByRole("listitem").filter({
+      has: this.page.getByText(String(newQuantity), { exact: true }),
+    });
+    await option.click(); // plain click: fail loudly instead of force-clicking
 
-    await this.safeClick(option);
+    await expect(quantityModal).toBeHidden({ timeout: 5000 });
 
-    // REFACTORED: Replaced 1000ms hard wait with a smart state check.
-    // We instantly proceed the exact millisecond the modal disappears.
-    await quantityModal.waitFor({ state: "hidden", timeout: 5000 });
+    // Fail here, with a clear message, if the quantity didn't actually change
+    await expect(currentQtyLocator).toContainText(String(newQuantity), {
+      timeout: 10000,
+    });
   }
 
   async goToCart() {
