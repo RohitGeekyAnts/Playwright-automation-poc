@@ -13,75 +13,51 @@ export class BasePage {
   }
 
   // Fallback for when scrolling triggers the overlay again before a click
+  // Click a dismiss button only if it is showing. Every click is bounded: Playwright's
+  // default click timeout is unlimited, so an un-clickable button used to hang the
+  // whole test until its 180s timeout.
+  private async dismissIfVisible(locator: Locator) {
+    try {
+      if (await locator.isVisible()) {
+        await locator.click({ timeout: 2000 });
+        await locator
+          .waitFor({ state: "hidden", timeout: 3000 })
+          .catch(() => {});
+      }
+    } catch {
+      // Not clickable right now: ignore it and carry on
+    }
+  }
+
   async dismissVisibleOverlay() {
-    // 1. Substitute Savings Modal fallback ("Not now" button)
-    const notNowBtn = this.page
-      .getByRole("button", { name: /not now/i })
-      .first();
-    try {
-      if (await notNowBtn.isVisible()) {
-        await notNowBtn.click();
-        await notNowBtn
-          .waitFor({ state: "hidden", timeout: 3000 })
-          .catch(() => {});
-      }
-    } catch (error) {}
+    const p = this.page;
 
-    // 2. New promo dialog & image-based cross fallback
-    const crossBtn = this.page
-      .locator(
-        'button[aria-label="cross"], button[aria-label="Close"], button:has(img[alt*="cross" i])',
-      )
-      .first();
-    try {
-      if (await crossBtn.isVisible()) {
-        await crossBtn.click();
-        await crossBtn
-          .waitFor({ state: "hidden", timeout: 3000 })
-          .catch(() => {});
-      }
-    } catch (error) {}
+    await this.dismissIfVisible(
+      p.getByRole("button", { name: /not now/i }).first(),
+    );
+    await this.dismissIfVisible(
+      p
+        .locator(
+          'button[aria-label="cross"], button[aria-label="Close"], button:has(img[alt*="cross" i])',
+        )
+        .first(),
+    );
+    await this.dismissIfVisible(p.locator(".bg_power_close").first());
+    // Partial class match, so a changed hash suffix doesn't break it
+    await this.dismissIfVisible(
+      p.locator('[class*="Dialog__vsatOverlay"] button').first(),
+    );
 
-    // 3. Old overlay fallback
-    const powerCloseBtn = this.page.locator(".bg_power_close").first();
+    // 3rd-party ad iframe: Escape is the most reliable way to dismiss it
     try {
-      if (await powerCloseBtn.isVisible()) {
-        await powerCloseBtn.click();
-        await powerCloseBtn
-          .waitFor({ state: "hidden", timeout: 3000 })
-          .catch(() => {});
-      }
-    } catch (error) {}
-
-    // 4. Generic 1mg modal overlay interceptor cleanup
-    const genericOverlayClose = this.page
-      .locator(
-        '.Dialog__vsatOverlay__gJS_t button[aria-label="cross"], .Dialog__vsatOverlay__gJS_t button',
-      )
-      .first();
-    try {
-      if (await genericOverlayClose.isVisible()) {
-        await genericOverlayClose.click();
-        await genericOverlayClose
-          .waitFor({ state: "hidden", timeout: 3000 })
-          .catch(() => {});
-      }
-    } catch (error) {}
-
-    // FIX: 5. 3rd-Party Iframe Ads (Google/DoubleClick) Fallback
-    // If a massive ad iframe is hijacking the view, pressing Escape is usually the most
-    // reliable way to dismiss it without having to traverse the iframe's internal DOM.
-    try {
-      const adIframe = this.page
-        .locator('iframe[src*="doubleclick.net"]')
-        .first();
+      const adIframe = p.locator('iframe[src*="doubleclick.net"]').first();
       if (await adIframe.isVisible()) {
-        await this.page.keyboard.press("Escape");
+        await p.keyboard.press("Escape");
         await adIframe
           .waitFor({ state: "hidden", timeout: 2000 })
           .catch(() => {});
       }
-    } catch (error) {}
+    } catch {}
   }
 
   /**

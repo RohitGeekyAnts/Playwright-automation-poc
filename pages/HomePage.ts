@@ -236,9 +236,11 @@ export class HomePage extends BasePage {
     // FIX: partial class match survives the hash suffix changing on each deploy
     // (was '.LocationPicker__cityItem__t7eLq').
     const cityOption = this.page
-      .locator('[class*="LocationPicker__cityItem"]')
-      .filter({ hasText: new RegExp(cityName, "i") })
-      .first();
+      .locator("div")
+      .filter({ has: locationInput })
+      .filter({ has: this.page.getByText(cityName, { exact: true }) })
+      .last()
+      .getByText(cityName, { exact: true });
 
     await expect(async () => {
       await this.dismissVisibleOverlay();

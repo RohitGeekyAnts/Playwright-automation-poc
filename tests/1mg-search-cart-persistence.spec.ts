@@ -4,6 +4,13 @@ import { SearchResultsPage } from "../pages/SearchResultsPage";
 import { ProductPage } from "../pages/ProductPage";
 import { CartPage } from "../pages/CartPage";
 
+// Compare prices as numbers, not formatted strings. The search card shows "₹32.28"
+// while the product page shows "MRP ₹32.28"; the value is the same, only the label differs.
+const toNum = (s: string) => parseFloat(s.replace(/[^0-9.]/g, ""));
+
+// Normalise text like "4% off" / "4% OFF" / "4 % off" before comparing.
+const normalise = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+
 test("Flow 2: Search, Sort, Location Persistence, and Cart Math", async ({
   page,
 }) => {
@@ -86,9 +93,11 @@ test("Flow 2: Search, Sort, Location Persistence, and Cart Math", async ({
 
   // Assert using the cleanName
   expect(pdpDetails.name.toLowerCase()).toContain(cleanName.toLowerCase());
-  expect(pdpDetails.sellingPrice).toEqual(capturedCard.sellingPrice);
-  expect(pdpDetails.mrp).toEqual(capturedCard.mrp);
-  expect(pdpDetails.discount).toEqual(capturedCard.discount);
+
+  // FIX: compare numeric values, so "MRP ₹32.28" vs "₹32.28" no longer fails
+  expect(toNum(pdpDetails.sellingPrice)).toBe(toNum(capturedCard.sellingPrice));
+  expect(toNum(pdpDetails.mrp)).toBe(toNum(capturedCard.mrp));
+  expect(normalise(pdpDetails.discount)).toBe(normalise(capturedCard.discount));
 
   // 8. Validate Breadcrumb ends with the product name
   const breadcrumbText = (await productPage.getBreadcrumbText()) || "";
@@ -157,17 +166,16 @@ test("Flow 2: Search, Sort, Location Persistence, and Cart Math", async ({
   // 16. Open cart, validate math (Item Total = Selling Price x 2)
   await productPage.goToCart();
 
-  const numericSP = parseFloat(
-    capturedCard.sellingPrice.replace(/[^0-9.]/g, ""),
-  );
+  const numericSP = toNum(capturedCard.sellingPrice);
 
+  // FIX: toBeCloseTo avoids floating-point surprises (e.g. 32.28 * 2)
   const currentItemTotal = await cartPage.getItemTotal(cleanName);
-  expect(currentItemTotal).toBe(numericSP * 2);
+  expect(currentItemTotal).toBeCloseTo(numericSP * 2, 2);
 
   // 17. Reduce qty to 1 and validate recalculation
   await cartPage.reduceQuantityToOne(cleanName);
   const updatedItemTotal = await cartPage.getItemTotal(cleanName);
-  expect(updatedItemTotal).toBe(numericSP * 1);
+  expect(updatedItemTotal).toBeCloseTo(numericSP * 1, 2);
 
   // 18. Remove item, check empty cart, and verify persistence after reload
   await cartPage.removeItem(cleanName);
